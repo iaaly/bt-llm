@@ -1,1 +1,7 @@
 node_modules
+.env.local
+build
+.next
+package-lock.json
+
+
