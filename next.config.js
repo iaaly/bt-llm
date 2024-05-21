@@ -7,9 +7,17 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       sharp$: false,
-      'onnxruntime-node$': false,
+      "onnxruntime-node$": false,
     };
     return config;
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: "https://scjzsynbkqojfupfjsep.supabase.co/:path*",
+      },
+    ];
   },
 };
 

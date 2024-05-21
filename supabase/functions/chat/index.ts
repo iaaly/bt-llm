@@ -12,6 +12,7 @@ const openai = new OpenAI({
 // These are automatically injected
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+const supabaseServerKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +25,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl) {
     return new Response(
       JSON.stringify({
         error: "Missing environment variables.",
@@ -38,7 +39,7 @@ Deno.serve(async (req) => {
 
   const authorization = req.headers.get("Authorization");
 
-  if (!authorization) {
+  if (!authorization && !supabaseServerKey) {
     return new Response(
       JSON.stringify({ error: `No authorization header passed` }),
       {
@@ -48,16 +49,22 @@ Deno.serve(async (req) => {
     );
   }
 
-  const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        authorization,
-      },
-    },
-    auth: {
-      persistSession: false,
-    },
-  });
+  const supabase = supabaseServerKey
+    ? createClient<Database>(supabaseUrl, supabaseServerKey)
+    : createClient<Database>(supabaseUrl, supabaseAnonKey, {
+        global: {
+          headers: {
+            authorization,
+          },
+        },
+        auth: {
+          persistSession: false,
+        },
+      });
+
+  if (supabaseServerKey) {
+    console.log("Using server key");
+  }
 
   const { messages, embedding } = await req.json();
 
@@ -67,7 +74,7 @@ Deno.serve(async (req) => {
       match_threshold: 0.8,
     })
     .select("content")
-    .limit(5);
+    .limit(2);
 
   if (matchError) {
     console.error(matchError);
@@ -115,6 +122,8 @@ Deno.serve(async (req) => {
       },
       ...messages,
     ];
+
+  console.log("compeltionMessages", completionMessages);
 
   const completionStream = await openai.chat.completions.create({
     model: "@cf/meta/llama-2-7b-chat-int8",

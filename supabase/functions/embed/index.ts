@@ -1,62 +1,69 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 /// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
-import { createClient } from '@supabase/supabase-js';
-import { Database } from '../_lib/database.ts';
+import { createClient } from "@supabase/supabase-js";
+import { Database } from "../_lib/database.ts";
 
-const model = new Supabase.ai.Session('gte-small');
+const model = new Supabase.ai.Session("gte-small");
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+const supabaseServerKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 Deno.serve(async (req) => {
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl) {
     return new Response(
       JSON.stringify({
-        error: 'Missing environment variables.',
+        error: "Missing environment variables.",
       }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       }
     );
   }
 
-  const authorization = req.headers.get('Authorization');
+  const authorization = req.headers.get("Authorization");
 
-  if (!authorization) {
+  if (!authorization && !supabaseServerKey) {
     return new Response(
       JSON.stringify({ error: `No authorization header passed` }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       }
     );
   }
 
-  const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        authorization,
-      },
-    },
-    auth: {
-      persistSession: false,
-    },
-  });
+  const supabase = supabaseServerKey
+    ? createClient<Database>(supabaseUrl, supabaseServerKey)
+    : createClient<Database>(supabaseUrl, supabaseAnonKey, {
+        global: {
+          headers: {
+            authorization,
+          },
+        },
+        auth: {
+          persistSession: false,
+        },
+      });
+
+  if (supabaseServerKey) {
+    console.log("Using server key");
+  }
 
   const { ids, table, contentColumn, embeddingColumn } = await req.json();
 
   const { data: rows, error: selectError } = await supabase
     .from(table)
-    .select(`id, ${contentColumn}` as '*')
-    .in('id', ids)
+    .select(`id, ${contentColumn}` as "*")
+    .in("id", ids)
     .is(embeddingColumn, null);
 
   if (selectError) {
     return new Response(JSON.stringify({ error: selectError }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 
@@ -80,7 +87,7 @@ Deno.serve(async (req) => {
       .update({
         [embeddingColumn]: embedding,
       })
-      .eq('id', id);
+      .eq("id", id);
 
     if (error) {
       console.error(
@@ -100,6 +107,6 @@ Deno.serve(async (req) => {
 
   return new Response(null, {
     status: 204,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 });
